@@ -26,7 +26,6 @@ int run_add(PythonInterpreter *interpreter) {
 }
 
 int main(int argc, char *argv[]) {
-    int i;
     PythonInterpreter interpreter;
     const char *func_name = "hello_python";
 
