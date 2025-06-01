@@ -206,7 +206,7 @@ PIResult py_interpreter_add(PythonInterpreter *interpreter, unsigned long a, uns
     // Acquire GIL (Global Interpreter Lock)
     gstate = PyGILState_Ensure();
 
-    // Prepare method arguments, in this case this method has no arguments.
+    // Prepare method arguments by converting 'unsigned long' into `PyObject`.
     pA = PyLong_FromUnsignedLong(a);
     pB = PyLong_FromUnsignedLong(b);
     args = PyTuple_New(2);
