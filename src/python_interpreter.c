@@ -94,7 +94,7 @@ PIResult py_interpreter_initialize(PythonInterpreter *interpreter, const char* f
     status = Py_PreInitialize(&preconfig);
     if (PyStatus_Exception(status)) {
         Py_ExitStatusException(status);
-        return 1;
+        return PI_PREINITIALIZE_ERR;
     }
 
     ////////////////////////////////////
