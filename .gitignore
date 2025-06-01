@@ -1,5 +1,5 @@
 build/
 .vscode/
-src/__pycache__/
-
-
+**/__pycache__/
+include/config.h
+**/.DS_Store

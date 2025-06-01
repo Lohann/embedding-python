@@ -1,146 +1,62 @@
-#define PY_SSIZE_T_CLEAN
-#define _GNU_SOURCE
-#include <libgen.h>
-#include <string.h>
 #include <stdio.h>
-#include <unistd.h>
-#include <Python.h>
-#include <wchar.h>
+#include <stdlib.h>
+#include "python_interpreter.h"
 
-// Get python's base source directory
-wchar_t* get_pythonpath(wchar_t *output) {
-    char cwd[PATH_MAX];
-    size_t strSize;
-    if (getcwd(cwd, sizeof(cwd)) == NULL) return NULL;
-    strSize = strlen(cwd)+1;
-    if (output == NULL) {
-        output = malloc(sizeof(wchar_t) * strSize);
+// Run python's `add` method 100 times.
+int run_add(PythonInterpreter *interpreter) {
+    int i;
+    unsigned long a, b, result;
+
+    for (i = 0; i < 100; i++)
+    {
+        a = (unsigned long) rand();
+        b = (unsigned long) rand();
+        if (py_interpreter_add(interpreter, a, b, &result) != PI_OK)
+        {
+            printf("add failed\n");
+            return 1;
+        }
+        printf("%li + %li = %li\n", a, b, result);
+        if (a + b != result) {
+            printf("wrong result, expect %li, got: %li.\n", a+b, result);
+            return 1;
+        }
     }
-    mbstowcs(output, (char *)&cwd, strSize);
-    return output;
+    return 0;
 }
 
 int main(int argc, char *argv[]) {
-    PyObject *pName, *pModule, *pFunc, *pArgs, *pValue;
-    PyStatus status;
-    PyPreConfig preconfig;
-    PyConfig config;
-    const char *filename = "src.hello";
+    int i;
+    PythonInterpreter interpreter;
     const char *func_name = "hello_python";
-    // char *actualpath[PATH_MAX + 1];
-    // char *ptr;
-    // ptr = realpath(argv[0], actualpath);
-    // ptr = dirname(actualpath);
-    // ptr = dirname(ptr);
-    // printf("command: '%s'\n", ptr);
 
-    /* Get base source directory path */
-    wchar_t *wcwd = get_pythonpath(NULL);
-    if (wcwd == NULL) {
-        printf("failed to read current directory.\n");
-        return 1;
-    }
-    wprintf(L"current working dir: %ls\n", wcwd);
+    // Initialize the randomizer using the current timestamp as a seed
+    // (The time() function is provided by the <time.h> header file)
+    srand(time(NULL));
 
-    /* Pre-initialize Python */
-    PyPreConfig_InitPythonConfig(&preconfig);
-    preconfig.utf8_mode = 1;
-    preconfig.allocator = PYMEM_ALLOCATOR_MALLOC;
-    status = Py_PreInitialize(&preconfig);
-    if (PyStatus_Exception(status)) {
-        Py_ExitStatusException(status);
+    // Initialize interpreter
+    if (py_interpreter_initialize(&interpreter, func_name, argc, argv) != PI_OK) {
+        printf("load interpreter failed.\n");
         return 1;
     }
 
-    /* Initialize Python Interpreter */
-    PyConfig_InitPythonConfig(&config);
-    config.pythonpath_env = wcwd;
-    status = PyConfig_SetBytesArgv(&config, argc, argv);
-    if (PyStatus_Exception(status)) {
-        PyConfig_Clear(&config);
-        Py_ExitStatusException(status);
+    // Call `hello_python` function
+    py_interpreter_hello_python(&interpreter);
+    py_interpreter_hello_python(&interpreter);
+
+    // Call `add` function
+    unsigned long result;
+    if (py_interpreter_add(&interpreter, 5, 7, &result) != PI_OK) {
+        printf("add failed\n");
         return 1;
     }
+    printf("5 + 7 = %li\n", result);
 
-    /* optional but recommended */
-    status = Py_InitializeFromConfig(&config);
-    // Py_Initialize();
-    if (PyStatus_Exception(status)) {
-        PyConfig_Clear(&config);
-        Py_ExitStatusException(status);
-        return 1;
-    }
-    PyConfig_Clear(&config);
+    // Call `add` 100 times with random values.
+    run_add(&interpreter);
 
-    pName = PyUnicode_DecodeFSDefault(filename);
-    if (pName == NULL) {
-        printf("deu ruim 4.\n");
-        PyErr_Print();
-        fprintf(stderr, "Failed to convert string to python object \"%s\"\n", filename);
-        return 1;
-    }
+    // Cleanup interpreter memory
+    py_interpreter_free(&interpreter);
 
-    pModule = PyImport_Import(pName);
-    Py_DECREF(pName);
-    if (pModule == NULL) {
-        PyErr_Print();
-        fprintf(stderr, "Failed to load \"%s\"\n", filename);
-        return 1;
-    }
-
-    pFunc = PyObject_GetAttrString(pModule, func_name);
-    if (pFunc == NULL || !PyCallable_Check(pFunc)) {
-        if (PyErr_Occurred()) PyErr_Print();
-        fprintf(stderr, "Cannot find function \"%s\"\n", func_name);
-        return 1;
-    }
-
-    pArgs = PyTuple_New(0);
-    if (pArgs == NULL) {
-        if (PyErr_Occurred()) PyErr_Print();
-        fprintf(stderr, "Failed to create tuple\n");
-        return 1;
-    }
-
-    pValue = PyObject_CallObject(pFunc, pArgs);
-    Py_DECREF(pArgs);
-
-    if (pValue == NULL || pValue == Py_None) {
-        fprintf(stdout, "returned null\n");
-    }
-
-    if (Py_FinalizeEx() < 0) {
-        return 120;
-    }
     return 0;
-    // printf() displays the string inside quotation
-    // printf("Hello, World!\n");
-
-    //     PyStatus status;
-    //     PyConfig config;
-    //     PyConfig_InitPythonConfig(&config);
-
-    //     /* optional but recommended */
-    //     status = PyConfig_SetBytesString(&config, &config.program_name, argv[0]);
-    //     if (PyStatus_Exception(status)) {
-    //         goto exception;
-    //     }
-
-    //     status = Py_InitializeFromConfig(&config);
-    //     if (PyStatus_Exception(status)) {
-    //         goto exception;
-    //     }
-    //     PyConfig_Clear(&config);
-    //     PyRun_SimpleString("def hello_python():\n"
-    //                        "    print(\"hello from python\")\n");
-
-    //     if (Py_FinalizeEx() < 0) {
-    //         exit(120);
-    //     }
-
-    //     return 0;
-    // exception:
-    //     PyConfig_Clear(&config);
-    //     Py_ExitStatusException(status);
-    //     return 1;
 }
