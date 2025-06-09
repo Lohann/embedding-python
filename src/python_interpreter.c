@@ -168,22 +168,38 @@ PIResult py_interpreter_initialize(PythonInterpreter *interpreter, const char* f
 }
 
 PIResult py_interpreter_hello_python(PythonInterpreter *interpreter) {
-    PyObject *returnValue;
+    PyObject *returnedValue;
+    PyGILState_STATE gstate;
+    PIResult status;
 
     // Check if interpreter is initialized.
     if (interpreter == NULL || interpreter->func == NULL) {
         return PI_NOT_READY_ERR;
     }
 
-    // Call python function without arguments
-    returnValue = PyObject_CallObject(interpreter->func, NULL);
+    // Acquire GIL (Global Interpreter Lock)
+    gstate = PyGILState_Ensure();
+    status = PI_UNKNOWN_ERR;
 
-    if (returnValue == NULL) {
-        if (PyErr_Occurred()) PyErr_Print();
-        return PI_UNKNOWN_ERR;
+    // Call python function without arguments
+    returnedValue = PyObject_CallObject(interpreter->func, NULL);
+
+    if (returnedValue == NULL) {
+        goto end;
+    } else if (Py_REFCNT(returnedValue) > 0) {
+        // Release returned value
+        Py_DECREF(returnedValue);
     }
 
-    return PI_OK;
+    status = PI_OK;
+end:
+    // Print any error if occured
+    if (PyErr_Occurred()) PyErr_Print();
+
+    // Release GIL
+    PyGILState_Release(gstate);
+
+    return status;
 }
 
 PIResult py_interpreter_add(PythonInterpreter *interpreter, unsigned long a, unsigned long b, unsigned long *result) {
@@ -229,12 +245,15 @@ PIResult py_interpreter_add(PythonInterpreter *interpreter, unsigned long a, uns
     // Set status ok
     status = PI_OK;
 end:
-    // Release GIL
-    PyGILState_Release(gstate);
-
+    // Print any error if occured
     if (PyErr_Occurred()) PyErr_Print();
+
     // Cleanup memory
     if (returnedValue != NULL && Py_REFCNT(returnedValue) > 0) Py_DECREF(returnedValue);
     if (args != NULL && Py_REFCNT(args) > 0) Py_DECREF(args);
+
+    // Release GIL
+    PyGILState_Release(gstate);
+
     return status;
 }
